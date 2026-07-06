@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>useDebounce — live demo</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0f1e2e;--body:#3a4a5c;--muted:#7c8b9a;--bg:#f6f9fc;--card:#fff;
+    --blue:#1F4E79;--blue2:#3b7bb8;--line:#e3ebf3;--good:#2f9e6f;--warn:#c9791f;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--body);padding:40px 20px;}
+  .wrap{max-width:640px;margin:0 auto;}
+  h1{font-family:'Space Grotesk';color:var(--ink);font-size:30px;font-weight:700;letter-spacing:-.01em;}
+  h1 code{font-family:'JetBrains Mono';color:var(--blue);font-size:26px;}
+  .sub{color:var(--muted);margin:8px 0 26px;font-size:15.5px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;box-shadow:0 4px 20px rgba(31,78,121,.05);}
+  label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:8px;}
+  input[type=text]{width:100%;padding:14px 16px;font-size:16px;font-family:'Inter';border:2px solid var(--line);
+    border-radius:11px;outline:none;transition:border-color .15s;color:var(--ink);}
+  input[type=text]:focus{border-color:var(--blue2);}
+  .row{display:flex;gap:14px;margin-top:22px;}
+  .stat{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center;}
+  .stat .n{font-family:'Space Grotesk';font-size:34px;font-weight:700;line-height:1;}
+  .stat .l{font-size:12.5px;color:var(--muted);margin-top:7px;}
+  .stat.keys .n{color:var(--warn);}
+  .stat.calls .n{color:var(--good);}
+  .stat.saved .n{color:var(--blue);}
+  .slider{margin-top:24px;display:flex;align-items:center;gap:14px;font-size:14px;color:var(--body);}
+  .slider input{flex:1;accent-color:var(--blue);}
+  .slider b{font-family:'JetBrains Mono';color:var(--blue);min-width:64px;text-align:right;}
+  .log{margin-top:24px;}
+  .log .h{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+  .results{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:6px 0;max-height:190px;overflow:auto;}
+  .results .item{padding:9px 16px;font-family:'JetBrains Mono';font-size:13px;color:var(--ink);border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;animation:fade .3s;}
+  .results .item:last-child{border-bottom:0;}
+  .results .q{color:var(--blue);font-weight:500;}
+  .results .t{color:var(--muted);}
+  .empty{padding:18px 16px;color:var(--muted);font-size:14px;font-style:italic;}
+  @keyframes fade{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+  .note{margin-top:22px;font-size:14px;color:var(--muted);line-height:1.6;}
+  .note b{color:var(--ink);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ---- the actual hook (same code as the package) ----
+function useDebounce(value, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
+
+function Demo() {
+  const [query, setQuery] = useState("");
+  const [delay, setDelay] = useState(400);
+  const debouncedQuery = useDebounce(query, delay);
+
+  const [keystrokes, setKeystrokes] = useState(0);
+  const [calls, setCalls] = useState([]);
+  const firstRun = useRef(true);
+
+  // "fire a search" only when the DEBOUNCED value settles
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    if (!debouncedQuery.trim()) return;
+    setCalls(c => [
+      { q: debouncedQuery, t: new Date().toLocaleTimeString("en-GB") },
+      ...c,
+    ].slice(0, 6));
+  }, [debouncedQuery]);
+
+  const saved = Math.max(0, keystrokes - calls.length);
+
+  return (
+    <div className="wrap">
+      <h1>The <code>useDebounce</code> hook</h1>
+      <p className="sub">Type a search below. Watch how many keystrokes you make versus how few
+        API calls actually fire — that gap is the network requests you just saved.</p>
+
+      <div className="card">
+        <label>Search as you type</label>
+        <input
+          type="text"
+          placeholder="Try typing: react developer…"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setKeystrokes(k => k + 1); }}
+        />
+
+        <div className="slider">
+          <span>Debounce delay</span>
+          <input type="range" min="0" max="800" step="50"
+            value={delay} onChange={(e) => setDelay(Number(e.target.value))} />
+          <b>{delay}ms</b>
+        </div>
+
+        <div className="row">
+          <div className="stat keys"><div className="n">{keystrokes}</div><div className="l">Keystrokes</div></div>
+          <div className="stat calls"><div className="n">{calls.length ? calls.length : 0}</div><div className="l">API calls fired</div></div>
+          <div className="stat saved"><div className="n">{saved}</div><div className="l">Calls saved</div></div>
+        </div>
+
+        <div className="log">
+          <div className="h">Actual searches fired</div>
+          <div className="results">
+            {calls.length === 0
+              ? <div className="empty">Nothing yet — start typing above.</div>
+              : calls.map((c, i) => (
+                  <div className="item" key={i}>
+                    <span className="q">"{c.q}"</span><span className="t">{c.t}</span>
+                  </div>
+                ))}
+          </div>
+        </div>
+
+        <p className="note">Without debouncing, every keystroke would fire a request — typing
+          <b> "react developer"</b> is <b>15 calls</b>. With <code style={{fontFamily:'JetBrains Mono',color:'#1F4E79'}}>useDebounce</code>,
+          the search fires only after you pause. Drag the delay to <b>0ms</b> to see the un-debounced behaviour.</p>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>
