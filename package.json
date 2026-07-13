@@ -1,6 +1,6 @@
 {
   "name": "@sureshsk/react-hooks",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A small, dependency-free, TypeScript-first collection of headless React hooks.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -30,6 +30,10 @@
     "react-hooks",
     "usedebounce",
     "debounce",
+    "usefocustrap",
+    "focus-trap",
+    "accessibility",
+    "a11y",
     "typescript",
     "headless"
   ],

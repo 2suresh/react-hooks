@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>useFocusTrap — live demo</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#0f1e2e;--body:#3a4a5c;--muted:#7c8b9a;--bg:#f6f9fc;--card:#fff;
+    --blue:#1F4E79;--blue2:#3b7bb8;--line:#e3ebf3;--good:#2f9e6f;--amber:#c9791f;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--body);padding:40px 20px;}
+  .wrap{max-width:680px;margin:0 auto;}
+  h1{font-family:'Space Grotesk';color:var(--ink);font-size:30px;font-weight:700;}
+  h1 code{font-family:'JetBrains Mono';color:var(--blue);font-size:26px;}
+  .sub{color:var(--muted);margin:8px 0 24px;font-size:15.5px;line-height:1.6;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;
+    box-shadow:0 4px 20px rgba(31,78,121,.05);position:relative;}
+  .page-content{border:1px dashed var(--line);border-radius:12px;padding:20px;background:#fbfdff;}
+  .plabel{font-size:11.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;}
+  button{font-family:'Inter';font-size:14.5px;font-weight:500;padding:10px 16px;border-radius:9px;
+    border:1.5px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;transition:all .12s;}
+  button:hover{border-color:var(--blue2);}
+  button:focus-visible{outline:3px solid var(--amber);outline-offset:2px;border-color:var(--amber);}
+  button.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .bg-links{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+  a.bg{font-size:14px;color:var(--blue2);padding:6px 4px;}
+  a.bg:focus-visible{outline:3px solid #e24b4a;outline-offset:2px;border-radius:4px;}
+  .overlay{position:absolute;inset:0;background:rgba(15,30,46,.45);border-radius:16px;
+    display:flex;align-items:center;justify-content:center;}
+  .modal{background:#fff;border-radius:14px;padding:24px;width:340px;box-shadow:0 12px 40px rgba(0,0,0,.2);}
+  .modal h2{font-family:'Space Grotesk';font-size:19px;color:var(--ink);margin-bottom:6px;}
+  .modal p{font-size:14px;color:var(--muted);margin-bottom:16px;line-height:1.55;}
+  .modal input{width:100%;padding:10px 12px;font-size:14.5px;font-family:'Inter';border:1.5px solid var(--line);
+    border-radius:9px;margin-bottom:14px;outline:none;}
+  .modal input:focus-visible{outline:3px solid var(--amber);outline-offset:1px;border-color:var(--amber);}
+  .modal .actions{display:flex;gap:9px;justify-content:flex-end;}
+  .tracker{margin-top:20px;background:#0f1d2e;border-radius:12px;padding:14px 18px;font-family:'JetBrains Mono';font-size:13px;}
+  .tracker .t-label{color:#7c93ab;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+  .tracker .t-val{color:#8fd3dd;font-size:14.5px;}
+  .tracker .warn{color:#f0995b;}
+  .hint{margin-top:18px;font-size:14px;color:var(--muted);line-height:1.65;}
+  .hint b{color:var(--ink);}
+  kbd{font-family:'JetBrains Mono';font-size:12px;background:#eef3f8;border:1px solid var(--line);
+    border-bottom-width:2px;border-radius:5px;padding:2px 6px;color:var(--ink);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ---------- the hook (same logic as the package) ----------
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+function isVisible(el) {
+  if (el.hasAttribute("inert") || el.hasAttribute("hidden")) return false;
+  let node = el;
+  while (node) {
+    const s = getComputedStyle(node);
+    if (s.display === "none") return false;
+    if (s.visibility === "hidden" || s.visibility === "collapse") return false;
+    node = node.parentElement;
+  }
+  return true;
+}
+
+function useFocusTrap(isActive, options = {}) {
+  const { onEscape, restoreFocus = true, autoFocus = true } = options;
+  const containerRef = useRef(null);
+  const previouslyFocused = useRef(null);
+  const onEscapeRef = useRef(onEscape);
+  useEffect(() => { onEscapeRef.current = onEscape; }, [onEscape]);
+
+  const getFocusable = useCallback(() => {
+    const root = containerRef.current;
+    if (!root) return [];
+    return Array.from(root.querySelectorAll(FOCUSABLE)).filter(isVisible);
+  }, []);
+
+  useEffect(() => {
+    if (!isActive) return;
+    const root = containerRef.current;
+    if (!root) return;
+
+    previouslyFocused.current = document.activeElement;
+
+    if (autoFocus) {
+      const f = getFocusable();
+      if (f.length) f[0].focus();
+      else { root.setAttribute("tabindex", "-1"); root.focus(); }
+    }
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") { onEscapeRef.current?.(); return; }
+      if (e.key !== "Tab") return;
+      const f = getFocusable();
+      if (!f.length) { e.preventDefault(); return; }
+      const first = f[0], last = f[f.length - 1], active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !root.contains(active)) { e.preventDefault(); last.focus(); }
+      } else {
+        if (active === last || !root.contains(active)) { e.preventDefault(); first.focus(); }
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      if (restoreFocus) {
+        const t = previouslyFocused.current;
+        if (t && document.contains(t)) t.focus();
+      }
+    };
+  }, [isActive, autoFocus, restoreFocus, getFocusable]);
+
+  return containerRef;
+}
+
+// ---------- demo ----------
+function Demo() {
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState("—");
+  const [escaped, setEscaped] = useState(false);
+
+  const ref = useFocusTrap(open, { onEscape: () => { setEscaped(true); setOpen(false); } });
+
+  // track what currently has focus, for the display
+  useEffect(() => {
+    const update = () => {
+      const el = document.activeElement;
+      if (!el || el === document.body) { setFocused("—"); return; }
+      const label = el.textContent?.trim().slice(0, 28) || el.getAttribute("placeholder") || el.tagName.toLowerCase();
+      const inside = ref.current?.contains(el);
+      setFocused((inside ? "🔒 " : "⚠️ ") + label);
+    };
+    document.addEventListener("focusin", update);
+    const id = setInterval(update, 200);
+    return () => { document.removeEventListener("focusin", update); clearInterval(id); };
+  }, []);
+
+  return (
+    <div className="wrap">
+      <h1>The <code>useFocusTrap</code> hook</h1>
+      <p className="sub">Open the dialog, then hold <kbd>Tab</kbd>. Focus cycles inside the modal
+        and never escapes to the links behind it. Press <kbd>Esc</kbd> to close — focus returns to
+        the exact button you opened it with.</p>
+
+      <div className="card">
+        <div className="page-content">
+          <div className="plabel">Page behind the modal</div>
+          <button className="primary" onClick={() => { setEscaped(false); setOpen(true); }}>
+            Open dialog
+          </button>
+          <div className="bg-links">
+            <a className="bg" href="#">Background link 1</a>
+            <a className="bg" href="#">Background link 2</a>
+            <a className="bg" href="#">Background link 3</a>
+          </div>
+        </div>
+
+        {open && (
+          <div className="overlay">
+            <div className="modal" ref={ref} role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+              <h2 id="dlg-title">Confirm changes</h2>
+              <p>Tab around — you can't get out. Shift+Tab wraps backwards too.</p>
+              <input type="text" placeholder="Your name" />
+              <div className="actions">
+                <button onClick={() => setOpen(false)}>Cancel</button>
+                <button className="primary" onClick={() => setOpen(false)}>Confirm</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="tracker">
+          <div className="t-label">Currently focused element</div>
+          <div className={"t-val" + (focused.startsWith("⚠️") ? " warn" : "")}>{focused}</div>
+        </div>
+      </div>
+
+      <p className="hint">
+        {escaped
+          ? <><b>Escape pressed.</b> Notice focus jumped straight back to “Open dialog” — not to the top of the page. That restore step is the one everyone forgets.</>
+          : <>The lock icon means focus is <b>inside</b> the trap. Without the hook, Tab would walk straight out into those background links while the modal is still open — invisible to a sighted user, but disorienting for anyone navigating by keyboard.</>}
+      </p>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>
